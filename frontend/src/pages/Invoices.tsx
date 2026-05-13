@@ -48,7 +48,7 @@ export default function Invoices() {
     setLines(lines.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
   };
 
-  const total = (inv: Invoice) => inv.line_items.reduce((s, i) => s + i.amount, 0);
+  const total = (inv: Invoice) => inv.line_items.reduce((s, i) => s + Number(i.amount), 0);
 
   const submit = async () => {
     setError("");
