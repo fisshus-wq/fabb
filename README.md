@@ -8,7 +8,26 @@ A full-stack accounting app built with **FastAPI + SQLite** (backend) and **Reac
 - **Invoices** — create and track customer invoices with line items
 - **Expenses / Bills** — track vendor bills by status (pending → paid → void)
 
-## Setup
+## Quick Start (Docker)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+git clone https://github.com/fisshus-wq/fabb.git
+cd fabb
+docker compose up --build
+```
+
+Open **http://localhost:3000** — that's it.
+
+To load sample data on first run:
+```bash
+docker compose exec backend python seed.py
+```
+
+---
+
+## Manual Setup
 
 ### Backend
 ```bash
