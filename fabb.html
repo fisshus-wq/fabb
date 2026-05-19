@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fabb Accounting</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; display: flex; min-height: 100vh; }
+  a { text-decoration: none; }
+
+  /* Sidebar */
+  #sidebar { width: 220px; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; padding: 24px 0; flex-shrink: 0; }
+  #sidebar .logo { font-size: 22px; font-weight: 700; color: #fff; padding: 0 24px 28px; letter-spacing: 1px; }
+  #sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+  #sidebar nav a { display: block; padding: 10px 24px; color: #b0b0c0; font-size: 14px; cursor: pointer; transition: background 0.15s, color 0.15s; border-left: 3px solid transparent; }
+  #sidebar nav a:hover { background: #16213e; color: #fff; }
+  #sidebar nav a.active { background: #16213e; color: #fff; border-left-color: #4f8ef7; padding-left: 21px; }
+
+  /* Main */
+  #main { flex: 1; padding: 32px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Page header */
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .page-header h1 { font-size: 24px; font-weight: 700; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; background: #4f8ef7; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .btn:hover { background: #3a7de0; }
+  .btn-sm { padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .btn-danger { background: #fee2e2; color: #991b1b; }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-muted { background: #f3f4f6; color: #374151; }
+  .btn-purple { background: #e0e7ff; color: #3730a3; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  th { text-align: left; padding: 12px 16px; background: #f0f2f5; font-size: 12px; font-weight: 600; color: #555; text-transform: uppercase; }
+  td { padding: 12px 16px; border-top: 1px solid #f0f0f0; font-size: 14px; }
+  tr.expandable:hover { background: #fafafa; cursor: pointer; }
+  tr.expanded-row td { background: #f8f9fa; }
+  .empty-row td { text-align: center; color: #aaa; padding: 40px; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
+  .badge-asset     { background: #d1fae5; }
+  .badge-liability { background: #fee2e2; }
+  .badge-equity    { background: #e0e7ff; }
+  .badge-income    { background: #fef9c3; }
+  .badge-expense   { background: #fce7f3; }
+  .badge-active    { background: #d1fae5; color: #065f46; }
+  .badge-inactive  { background: #f3f4f6; color: #6b7280; }
+  .badge-draft     { background: #f3f4f6; color: #374151; }
+  .badge-sent      { background: #dbeafe; color: #1e40af; }
+  .badge-paid      { background: #d1fae5; color: #065f46; }
+  .badge-void      { background: #fee2e2; color: #991b1b; }
+  .badge-pending   { background: #fef9c3; color: #854d0e; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.38); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; padding: 28px; width: 460px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.13); }
+  .modal.wide { width: 640px; }
+  .modal h2 { font-size: 18px; margin-bottom: 20px; }
+  .form-row { margin-bottom: 14px; }
+  .form-row label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #444; }
+  .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .form-grid { display: grid; gap: 12px; margin-bottom: 14px; }
+  .form-grid-2 { grid-template-columns: 1fr 1fr; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .error-msg { color: #dc2626; font-size: 13px; margin-bottom: 12px; }
+
+  /* Line items editor */
+  .lines-header, .line-row { display: grid; gap: 8px; margin-bottom: 6px; }
+  .lines-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; }
+  .line-row input, .line-row select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; width: 100%; }
+
+  /* Sub-table */
+  .sub-table { width: 100%; font-size: 13px; }
+  .sub-table th { background: none; padding: 4px 8px; font-size: 11px; color: #888; }
+  .sub-table td { padding: 4px 8px; border: none; }
+  .debit  { color: #065f46; }
+  .credit { color: #991b1b; }
+  .notes-row { margin-top: 8px; font-size: 13px; color: #555; }
+
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="logo">fabb</div>
+  <nav>
+    <a onclick="navigate('accounts')"       id="nav-accounts">Chart of Accounts</a>
+    <a onclick="navigate('journal')"        id="nav-journal">Journal Entries</a>
+    <a onclick="navigate('invoices')"       id="nav-invoices">Invoices</a>
+    <a onclick="navigate('expenses')"       id="nav-expenses">Expenses</a>
+  </nav>
+</div>
+
+<div id="main">
+
+  <!-- ───────────────── ACCOUNTS ───────────────── -->
+  <div id="page-accounts" class="page">
+    <div class="page-header">
+      <h1>Chart of Accounts</h1>
+      <button class="btn" onclick="openModal('account-modal')">+ Add Account</button>
+    </div>
+    <table>
+      <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Description</th><th>Status</th><th></th></tr></thead>
+      <tbody id="accounts-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ───────────────── JOURNAL ───────────────── -->
+  <div id="page-journal" class="page">
+    <div class="page-header">
+      <h1>Journal Entries</h1>
+      <button class="btn" onclick="openModal('journal-modal')">+ New Entry</button>
+    </div>
+    <table>
+      <thead><tr><th>Reference</th><th>Date</th><th>Description</th><th>Lines</th><th></th></tr></thead>
+      <tbody id="journal-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ───────────────── INVOICES ───────────────── -->
+  <div id="page-invoices" class="page">
+    <div class="page-header">
+      <h1>Invoices</h1>
+      <button class="btn" onclick="openModal('invoice-modal')">+ New Invoice</button>
+    </div>
+    <table>
+      <thead><tr><th>Number</th><th>Customer</th><th>Date</th><th>Due</th><th>Total</th><th>Status</th><th></th></tr></thead>
+      <tbody id="invoices-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ───────────────── EXPENSES ───────────────── -->
+  <div id="page-expenses" class="page">
+    <div class="page-header">
+      <h1>Expenses / Bills</h1>
+      <button class="btn" onclick="openModal('expense-modal')">+ Add Expense</button>
+    </div>
+    <table>
+      <thead><tr><th>Ref</th><th>Vendor</th><th>Date</th><th>Due</th><th>Amount</th><th>Category</th><th>Status</th><th></th></tr></thead>
+      <tbody id="expenses-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- Account Modal -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <h2>New Account</h2>
+    <div id="account-error" class="error-msg" style="display:none"></div>
+    <div class="form-grid form-grid-2">
+      <div class="form-row"><label>Code</label><input id="acc-code" /></div>
+      <div class="form-row"><label>Name</label><input id="acc-name" /></div>
+    </div>
+    <div class="form-row"><label>Type</label>
+      <select id="acc-type">
+        <option value="asset">Asset</option>
+        <option value="liability">Liability</option>
+        <option value="equity">Equity</option>
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Description</label><input id="acc-desc" /></div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-muted" onclick="closeModal('account-modal')" style="padding:8px 16px">Cancel</button>
+      <button class="btn" onclick="saveAccount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Journal Modal -->
+<div class="modal-overlay" id="journal-modal">
+  <div class="modal wide">
+    <h2>New Journal Entry</h2>
+    <div id="journal-error" class="error-msg" style="display:none"></div>
+    <div class="form-grid form-grid-2">
+      <div class="form-row"><label>Reference</label><input id="je-ref" /></div>
+      <div class="form-row"><label>Date</label><input type="date" id="je-date" /></div>
+    </div>
+    <div class="form-row"><label>Description</label><input id="je-desc" /></div>
+    <div style="margin-top:16px">
+      <strong style="font-size:13px">Lines</strong>
+      <div class="lines-header" style="grid-template-columns:2fr 1.5fr 1fr 1fr;margin-top:8px">
+        <span class="lines-label">Account</span>
+        <span class="lines-label">Note</span>
+        <span class="lines-label">Debit</span>
+        <span class="lines-label">Credit</span>
+      </div>
+      <div id="je-lines"></div>
+      <button class="btn-sm btn-purple" style="margin-top:4px" onclick="addJeLine()">+ Add line</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-muted" onclick="closeModal('journal-modal')" style="padding:8px 16px">Cancel</button>
+      <button class="btn" onclick="saveJournal()">Post Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice Modal -->
+<div class="modal-overlay" id="invoice-modal">
+  <div class="modal wide">
+    <h2>New Invoice</h2>
+    <div id="invoice-error" class="error-msg" style="display:none"></div>
+    <div class="form-grid form-grid-2">
+      <div class="form-row"><label>Invoice #</label><input id="inv-num" /></div>
+      <div class="form-row"><label>Customer Name</label><input id="inv-cust" /></div>
+      <div class="form-row"><label>Customer Email</label><input id="inv-email" /></div>
+      <div></div>
+      <div class="form-row"><label>Date</label><input type="date" id="inv-date" /></div>
+      <div class="form-row"><label>Due Date</label><input type="date" id="inv-due" /></div>
+    </div>
+    <div class="form-row"><label>Notes</label><input id="inv-notes" /></div>
+    <div style="margin-top:16px">
+      <strong style="font-size:13px">Line Items</strong>
+      <div class="lines-header" style="grid-template-columns:3fr 1fr 1fr;margin-top:8px">
+        <span class="lines-label">Description</span>
+        <span class="lines-label">Qty</span>
+        <span class="lines-label">Unit Price</span>
+      </div>
+      <div id="inv-lines"></div>
+      <button class="btn-sm btn-purple" style="margin-top:4px" onclick="addInvLine()">+ Add line</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-muted" onclick="closeModal('invoice-modal')" style="padding:8px 16px">Cancel</button>
+      <button class="btn" onclick="saveInvoice()">Create Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Expense Modal -->
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <h2>Add Expense / Bill</h2>
+    <div id="expense-error" class="error-msg" style="display:none"></div>
+    <div class="form-grid form-grid-2">
+      <div class="form-row"><label>Reference</label><input id="exp-ref" /></div>
+      <div class="form-row"><label>Vendor Name</label><input id="exp-vendor" /></div>
+      <div class="form-row"><label>Date</label><input type="date" id="exp-date" /></div>
+      <div class="form-row"><label>Due Date</label><input type="date" id="exp-due" /></div>
+      <div class="form-row"><label>Amount</label><input type="number" min="0" id="exp-amount" /></div>
+      <div class="form-row"><label>Category</label><input id="exp-cat" placeholder="e.g. Rent, Software" /></div>
+    </div>
+    <div class="form-row"><label>Notes</label><input id="exp-notes" /></div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-muted" onclick="closeModal('expense-modal')" style="padding:8px 16px">Cancel</button>
+      <button class="btn" onclick="saveExpense()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Storage ─────────────────────────────────────────────────────────────────
+const DB_KEY = 'fabb_data';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(DB_KEY)) || defaultData(); }
+  catch { return defaultData(); }
+}
+
+function save(data) {
+  localStorage.setItem(DB_KEY, JSON.stringify(data));
+}
+
+function defaultData() {
+  return { accounts: [], journalEntries: [], invoices: [], expenses: [], nextId: 1 };
+}
+
+function nextId() {
+  const d = load(); const id = d.nextId; d.nextId++; save(d); return id;
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+let currentPage = 'accounts';
+let expandedId = null;
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
+  currentPage = page;
+  expandedId = null;
+  render();
+}
+
+// ─── Modal helpers ────────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'journal-modal') resetJeLines();
+  if (id === 'invoice-modal') resetInvLines();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  clearError(id.replace('-modal', ''));
+}
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+function showError(prefix, msg) {
+  const el = document.getElementById(prefix + '-error');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function clearError(prefix) {
+  const el = document.getElementById(prefix + '-error');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
+}
+
+// ─── Accounts ────────────────────────────────────────────────────────────────
+function saveAccount() {
+  const d = load();
+  const code = document.getElementById('acc-code').value.trim();
+  const name = document.getElementById('acc-name').value.trim();
+  const type = document.getElementById('acc-type').value;
+  const desc = document.getElementById('acc-desc').value.trim();
+
+  if (!code || !name) return showError('account', 'Code and Name are required.');
+  if (d.accounts.find(a => a.code === code)) return showError('account', 'Account code already exists.');
+
+  d.accounts.push({ id: nextId(), code, name, type, description: desc, active: true });
+  save(d);
+  closeModal('account-modal');
+  ['acc-code','acc-name','acc-desc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('acc-type').value = 'asset';
+  renderAccounts();
+}
+
+function toggleAccount(id) {
+  const d = load();
+  const a = d.accounts.find(a => a.id === id);
+  if (a) { a.active = !a.active; save(d); renderAccounts(); }
+}
+
+function renderAccounts() {
+  const { accounts } = load();
+  const tbody = document.getElementById('accounts-tbody');
+  if (!accounts.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No accounts yet.</td></tr>'; return;
+  }
+  const sorted = [...accounts].sort((a,b) => a.code.localeCompare(b.code));
+  tbody.innerHTML = sorted.map(a => `
+    <tr>
+      <td><code>${esc(a.code)}</code></td>
+      <td>${esc(a.name)}</td>
+      <td><span class="badge badge-${a.type}">${a.type}</span></td>
+      <td style="color:#888">${esc(a.description || '—')}</td>
+      <td><span class="badge badge-${a.active ? 'active' : 'inactive'}">${a.active ? 'Active' : 'Inactive'}</span></td>
+      <td>
+        <button class="btn-sm ${a.active ? 'btn-danger' : 'btn-purple'}"
+          onclick="toggleAccount(${a.id})">${a.active ? 'Deactivate' : 'Activate'}</button>
+      </td>
+    </tr>`).join('');
+}
+
+// ─── Journal Entries ──────────────────────────────────────────────────────────
+let jeLineCount = 0;
+
+function resetJeLines() {
+  jeLineCount = 0;
+  document.getElementById('je-lines').innerHTML = '';
+  ['je-ref','je-date','je-desc'].forEach(id => document.getElementById(id).value = '');
+  addJeLine(); addJeLine();
+}
+
+function addJeLine() {
+  const { accounts } = load();
+  const opts = accounts.map(a => `<option value="${a.id}">${esc(a.code)} — ${esc(a.name)}</option>`).join('');
+  const i = jeLineCount++;
+  const div = document.createElement('div');
+  div.className = 'line-row';
+  div.style.gridTemplateColumns = '2fr 1.5fr 1fr 1fr';
+  div.innerHTML = `
+    <select id="jel-acc-${i}"><option value="">— select —</option>${opts}</select>
+    <input id="jel-desc-${i}" placeholder="note" />
+    <input id="jel-dr-${i}" type="number" min="0" placeholder="0.00" />
+    <input id="jel-cr-${i}" type="number" min="0" placeholder="0.00" />`;
+  document.getElementById('je-lines').appendChild(div);
+}
+
+function saveJournal() {
+  const d = load();
+  const ref = document.getElementById('je-ref').value.trim();
+  const date = document.getElementById('je-date').value;
+  const desc = document.getElementById('je-desc').value.trim();
+
+  if (!ref || !date) return showError('journal', 'Reference and Date are required.');
+  if (d.journalEntries.find(e => e.reference === ref)) return showError('journal', 'Reference already exists.');
+
+  const lines = [];
+  for (let i = 0; i < jeLineCount; i++) {
+    const accEl = document.getElementById(`jel-acc-${i}`);
+    if (!accEl) continue;
+    const accId = parseInt(accEl.value);
+    const debit  = parseFloat(document.getElementById(`jel-dr-${i}`).value) || 0;
+    const credit = parseFloat(document.getElementById(`jel-cr-${i}`).value) || 0;
+    const note   = document.getElementById(`jel-desc-${i}`).value.trim();
+    if (!accId && !debit && !credit) continue;
+    if (!accId) return showError('journal', 'All lines must have an account selected.');
+    lines.push({ accountId: accId, debit, credit, description: note });
+  }
+
+  if (lines.length < 2) return showError('journal', 'At least 2 lines required.');
+  const totalDr = lines.reduce((s,l) => s + l.debit, 0);
+  const totalCr = lines.reduce((s,l) => s + l.credit, 0);
+  if (Math.abs(totalDr - totalCr) > 0.001)
+    return showError('journal', `Entry is not balanced: debits ${fmt(totalDr)} ≠ credits ${fmt(totalCr)}`);
+
+  d.journalEntries.push({ id: nextId(), reference: ref, date, description: desc, lines });
+  save(d);
+  closeModal('journal-modal');
+  renderJournal();
+}
+
+function deleteJournal(id) {
+  if (!confirm('Delete this entry?')) return;
+  const d = load();
+  d.journalEntries = d.journalEntries.filter(e => e.id !== id);
+  save(d);
+  renderJournal();
+}
+
+function toggleJeRow(id) {
+  expandedId = expandedId === id ? null : id;
+  renderJournal();
+}
+
+function renderJournal() {
+  const { journalEntries, accounts } = load();
+  const tbody = document.getElementById('journal-tbody');
+  if (!journalEntries.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No journal entries yet.</td></tr>'; return;
+  }
+  const sorted = [...journalEntries].sort((a,b) => b.date.localeCompare(a.date));
+  const rows = [];
+  sorted.forEach(e => {
+    rows.push(`
+      <tr class="expandable" onclick="toggleJeRow(${e.id})">
+        <td><code>${esc(e.reference)}</code></td>
+        <td>${esc(e.date)}</td>
+        <td style="color:#555">${esc(e.description || '—')}</td>
+        <td>${e.lines.length}</td>
+        <td><button class="btn-sm btn-danger" onclick="event.stopPropagation();deleteJournal(${e.id})">Delete</button></td>
+      </tr>`);
+    if (expandedId === e.id) {
+      const lineRows = e.lines.map(l => {
+        const acc = accounts.find(a => a.id === l.accountId);
+        return `<tr>
+          <td>${acc ? esc(acc.code + ' — ' + acc.name) : 'Unknown'}</td>
+          <td style="color:#888">${esc(l.description || '—')}</td>
+          <td class="debit">${l.debit > 0 ? fmt(l.debit) : '—'}</td>
+          <td class="credit">${l.credit > 0 ? fmt(l.credit) : '—'}</td>
+        </tr>`;
+      }).join('');
+      rows.push(`
+        <tr class="expanded-row"><td colspan="5">
+          <table class="sub-table">
+            <thead><tr><th>Account</th><th>Note</th><th>Debit</th><th>Credit</th></tr></thead>
+            <tbody>${lineRows}</tbody>
+          </table>
+        </td></tr>`);
+    }
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+let invLineCount = 0;
+
+function resetInvLines() {
+  invLineCount = 0;
+  document.getElementById('inv-lines').innerHTML = '';
+  ['inv-num','inv-cust','inv-email','inv-date','inv-due','inv-notes'].forEach(id => document.getElementById(id).value = '');
+  addInvLine();
+}
+
+function addInvLine() {
+  const i = invLineCount++;
+  const div = document.createElement('div');
+  div.className = 'line-row';
+  div.style.gridTemplateColumns = '3fr 1fr 1fr';
+  div.innerHTML = `
+    <input id="invl-desc-${i}" placeholder="description" />
+    <input id="invl-qty-${i}" type="number" min="0" value="1" />
+    <input id="invl-price-${i}" type="number" min="0" placeholder="0.00" />`;
+  document.getElementById('inv-lines').appendChild(div);
+}
+
+function saveInvoice() {
+  const d = load();
+  const number = document.getElementById('inv-num').value.trim();
+  const customer = document.getElementById('inv-cust').value.trim();
+  const email  = document.getElementById('inv-email').value.trim();
+  const date   = document.getElementById('inv-date').value;
+  const due    = document.getElementById('inv-due').value;
+  const notes  = document.getElementById('inv-notes').value.trim();
+
+  if (!number || !customer || !date || !due) return showError('invoice', 'Number, Customer, Date and Due Date are required.');
+  if (d.invoices.find(i => i.number === number)) return showError('invoice', 'Invoice number already exists.');
+
+  const items = [];
+  for (let i = 0; i < invLineCount; i++) {
+    const desc  = document.getElementById(`invl-desc-${i}`)?.value.trim();
+    const qty   = parseFloat(document.getElementById(`invl-qty-${i}`)?.value) || 0;
+    const price = parseFloat(document.getElementById(`invl-price-${i}`)?.value) || 0;
+    if (!desc && !price) continue;
+    if (!desc) return showError('invoice', 'Each line item needs a description.');
+    items.push({ description: desc, quantity: qty, unitPrice: price });
+  }
+  if (!items.length) return showError('invoice', 'At least one line item required.');
+
+  d.invoices.push({ id: nextId(), number, customerName: customer, customerEmail: email, date, dueDate: due, status: 'draft', notes, lineItems: items });
+  save(d);
+  closeModal('invoice-modal');
+  renderInvoices();
+}
+
+function setInvoiceStatus(id, status) {
+  const d = load();
+  const inv = d.invoices.find(i => i.id === id);
+  if (inv) { inv.status = status; save(d); renderInvoices(); }
+}
+
+function deleteInvoice(id) {
+  if (!confirm('Delete this invoice?')) return;
+  const d = load();
+  d.invoices = d.invoices.filter(i => i.id !== id);
+  save(d);
+  renderInvoices();
+}
+
+function toggleInvRow(id) {
+  expandedId = expandedId === id ? null : id;
+  renderInvoices();
+}
+
+function invTotal(inv) {
+  return inv.lineItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+}
+
+const INV_STATUSES = ['draft','sent','paid','void'];
+
+function renderInvoices() {
+  const { invoices } = load();
+  const tbody = document.getElementById('invoices-tbody');
+  if (!invoices.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No invoices yet.</td></tr>'; return;
+  }
+  const sorted = [...invoices].sort((a,b) => b.date.localeCompare(a.date));
+  const rows = [];
+  sorted.forEach(inv => {
+    const statusOpts = INV_STATUSES.map(s => `<option value="${s}" ${inv.status===s?'selected':''}>${s}</option>`).join('');
+    rows.push(`
+      <tr class="expandable" onclick="toggleInvRow(${inv.id})">
+        <td><code>${esc(inv.number)}</code></td>
+        <td>${esc(inv.customerName)}</td>
+        <td>${esc(inv.date)}</td>
+        <td>${esc(inv.dueDate)}</td>
+        <td><strong>$${fmt(invTotal(inv))}</strong></td>
+        <td><span class="badge badge-${inv.status}">${inv.status}</span></td>
+        <td style="display:flex;gap:6px;align-items:center">
+          <select class="btn-sm btn-purple" onclick="event.stopPropagation()"
+            onchange="setInvoiceStatus(${inv.id},this.value)">${statusOpts}</select>
+          <button class="btn-sm btn-danger" onclick="event.stopPropagation();deleteInvoice(${inv.id})">Delete</button>
+        </td>
+      </tr>`);
+    if (expandedId === inv.id) {
+      const lineRows = inv.lineItems.map(l => `
+        <tr>
+          <td>${esc(l.description)}</td>
+          <td>${l.quantity}</td>
+          <td>$${fmt(l.unitPrice)}</td>
+          <td><strong>$${fmt(l.quantity * l.unitPrice)}</strong></td>
+        </tr>`).join('');
+      rows.push(`
+        <tr class="expanded-row"><td colspan="7">
+          <table class="sub-table">
+            <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
+            <tbody>${lineRows}</tbody>
+          </table>
+          ${inv.notes ? `<p class="notes-row">Notes: ${esc(inv.notes)}</p>` : ''}
+        </td></tr>`);
+    }
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+function saveExpense() {
+  const d = load();
+  const ref    = document.getElementById('exp-ref').value.trim();
+  const vendor = document.getElementById('exp-vendor').value.trim();
+  const date   = document.getElementById('exp-date').value;
+  const due    = document.getElementById('exp-due').value;
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const cat    = document.getElementById('exp-cat').value.trim();
+  const notes  = document.getElementById('exp-notes').value.trim();
+
+  if (!ref || !vendor || !date || isNaN(amount)) return showError('expense', 'Reference, Vendor, Date and Amount are required.');
+  if (d.expenses.find(e => e.reference === ref)) return showError('expense', 'Reference already exists.');
+
+  d.expenses.push({ id: nextId(), reference: ref, vendorName: vendor, date, dueDate: due || null, amount, category: cat, status: 'pending', notes });
+  save(d);
+  closeModal('expense-modal');
+  ['exp-ref','exp-vendor','exp-date','exp-due','exp-amount','exp-cat','exp-notes'].forEach(id => document.getElementById(id).value = '');
+  renderExpenses();
+}
+
+function setExpenseStatus(id, status) {
+  const d = load();
+  const exp = d.expenses.find(e => e.id === id);
+  if (exp) { exp.status = status; save(d); renderExpenses(); }
+}
+
+function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  const d = load();
+  d.expenses = d.expenses.filter(e => e.id !== id);
+  save(d);
+  renderExpenses();
+}
+
+const EXP_STATUSES = ['pending','paid','void'];
+
+function renderExpenses() {
+  const { expenses } = load();
+  const tbody = document.getElementById('expenses-tbody');
+  if (!expenses.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No expenses yet.</td></tr>'; return;
+  }
+  const sorted = [...expenses].sort((a,b) => b.date.localeCompare(a.date));
+  tbody.innerHTML = sorted.map(exp => {
+    const statusOpts = EXP_STATUSES.map(s => `<option value="${s}" ${exp.status===s?'selected':''}>${s}</option>`).join('');
+    return `
+      <tr>
+        <td><code>${esc(exp.reference)}</code></td>
+        <td>${esc(exp.vendorName)}</td>
+        <td>${esc(exp.date)}</td>
+        <td style="color:#888">${esc(exp.dueDate || '—')}</td>
+        <td><strong>$${fmt(exp.amount)}</strong></td>
+        <td style="color:#555">${esc(exp.category || '—')}</td>
+        <td><span class="badge badge-${exp.status}">${exp.status}</span></td>
+        <td style="display:flex;gap:6px;align-items:center">
+          <select class="btn-sm btn-purple" onchange="setExpenseStatus(${exp.id},this.value)">${statusOpts}</select>
+          <button class="btn-sm btn-danger" onclick="deleteExpense(${exp.id})">Delete</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+// ─── Render dispatcher ────────────────────────────────────────────────────────
+function render() {
+  renderAccounts();
+  renderJournal();
+  renderInvoices();
+  renderExpenses();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) { return Number(n).toFixed(2); }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+navigate('accounts');
+</script>
+</body>
+</html>
